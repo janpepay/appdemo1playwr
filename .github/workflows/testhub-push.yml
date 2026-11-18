@@ -1,0 +1,41 @@
+name: Notificar push a TestHub
+on:
+  push:
+    branches: [develop]
+permissions: {}
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Enviar evento firmado a TestHub
+        env:
+          TESTHUB_WEBHOOK_URL: ${{ vars.TESTHUB_WEBHOOK_URL }}
+          TESTHUB_WEBHOOK_SECRET: ${{ secrets.TESTHUB_WEBHOOK_SECRET }}
+          TESTHUB_SITE_ACCESS: ${{ secrets.TESTHUB_SITE_ACCESS }}
+        run: |
+          node <<'JS'
+          const { createHmac, createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
+          const { TESTHUB_WEBHOOK_URL, TESTHUB_WEBHOOK_SECRET, TESTHUB_SITE_ACCESS, GITHUB_EVENT_PATH, GITHUB_RUN_ID, GITHUB_REPOSITORY } = process.env;
+          async function notify() {
+            const url = new URL(TESTHUB_WEBHOOK_URL);
+            if (url.origin !== 'https://testhub-qa-demo-697863.janpepay.chatgpt.site' ||
+                !/^\/api\/remote\/webhooks\/github\/[a-f0-9-]{36}$/.test(url.pathname) ||
+                !TESTHUB_WEBHOOK_SECRET || !TESTHUB_SITE_ACCESS) throw Error('Configura la URL y los secretos del piloto.');
+            const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, 'utf8'));
+            const body = JSON.stringify({ ref:event.ref, after:event.after, deleted:event.deleted, repository:{ full_name:GITHUB_REPOSITORY } });
+            const signature = createHmac('sha256',TESTHUB_WEBHOOK_SECRET).update(body).digest('hex');
+            const delivery = createHash('sha256').update(GITHUB_REPOSITORY + ':' + GITHUB_RUN_ID).digest('hex').slice(0,32)
+              .replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5');
+            const response = await fetch(url,{
+              method:'POST', redirect:'error', signal:AbortSignal.timeout(20000),
+              headers:{ 'Content-Type':'application/json','X-GitHub-Event':'push','X-GitHub-Delivery':delivery,
+                'X-Hub-Signature-256':'sha256='+signature, 'OAI-Sites-Authorization':'Bearer '+TESTHUB_SITE_ACCESS },
+              body,
+            });
+            if (!response.ok) throw Error('TestHub respondió HTTP ' + response.status);
+            console.log(response.status === 202 ? 'El evento no coincide con una regla activa.' : 'Evento recibido por TestHub.');
+          }
+          notify().catch(error => { console.error(error.message); process.exitCode=1; });
+          JS
