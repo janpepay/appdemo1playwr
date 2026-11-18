@@ -25,3 +25,5 @@ Puedes ejecutar solo el caso correcto con `npm run test:ok` o solo el fallo con 
 La web de TodoMVC ya es pública. El repositorio con esta suite debe publicarse por separado para que TestHub pueda obtenerlo. Mientras el ejecutor remoto de TestHub no esté conectado, la prueba quedará en cola. Quien lanza desde TestHub no necesita instalar nada.
 
 Para apuntar el código a otra instancia de TodoMVC compatible, ajusta `BASE_URL` conservando la barra final. Si cambias a otra aplicación, adapta también los pasos y los selectores.
+
+Para comprobar el selector de TestHub, pulsa **Actualizar ramas** en el lanzador y elige `develop`, la rama de trabajo del piloto.
